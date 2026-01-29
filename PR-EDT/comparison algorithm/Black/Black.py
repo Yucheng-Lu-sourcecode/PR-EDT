@@ -7,17 +7,27 @@ import numpy as np
 import torch
 import distance_transforms as dts
 
-# 配置PyTorch内存参数，最大化兼容性
+from pathlib import Path
+
+def get_image_paths(image_dir="./image/", extensions=None, recursive=False):
+    ext = {'.png'} if extensions is None else extensions
+    path = Path(image_dir)
+    files = path.rglob("*") if recursive else path.iterdir()
+    result = [str(f) for f in files if f.is_file() and f.suffix.lower() in ext and not f.name.startswith('.')]
+    return sorted(result) if result else []
+
 os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True,max_split_size_mb:64,garbage_collection_threshold:0.4"
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
-def generate_binary_matrix(size, black_percent):
+def generate_binary_matrix(size, black_percent, seed=42):
     """生成二值化矩阵（兼容占比0%场景）"""
     black_ratio = black_percent / 100.0
-    # 占比0%时，直接返回全0矩阵，避免随机数生成冗余
     if black_ratio <= 0:
         return np.zeros((size, size), dtype=np.uint8)
-    random_matrix = np.random.rand(size, size)
+    
+    rng = np.random.default_rng(seed)
+
+    random_matrix = rng.rand(size, size)
     binary_matrix = (random_matrix < black_ratio).astype(np.uint8)
     return binary_matrix
 
@@ -31,7 +41,7 @@ def calculate_required_memory(size, dtype=torch.uint8):
     if dtype == torch.uint8:
         bytes_per_element = 1
     else:
-        bytes_per_element = 1  # 强制uint8，最小化显存占用
+        bytes_per_element = 1  
     
     total_mb = (element_count * bytes_per_element) / (1024 * 1024)
     return total_mb
@@ -57,13 +67,13 @@ def cal_edm_single(matrix):
     with torch.no_grad():
         try:
             tensor = torch.tensor(matrix, device='cuda', dtype=torch.uint8)
-            torch.cuda.synchronize()  # 同步GPU，保证计时准确
+            torch.cuda.synchronize()  
             start = time.time()
             dts.transform_cuda(tensor)
             torch.cuda.synchronize()
             one_time = time.time() - start
         except torch.OutOfMemoryError:
-            return -1  # 标记OOM失败
+            return -1  
         except Exception:
             return 0.0
 
@@ -74,12 +84,11 @@ def cal_edm_single(matrix):
 
 def get_avg_time(n, size, black_percent):
     """计算平均耗时（针对8192尺寸+0%占比增加容错）"""
-    # 第一步：8192尺寸专属显存预检，预留100MiB缓冲（应对碎片）
     if size == 8192:
         required_mb = calculate_required_memory(size)
         available_mb = get_available_cuda_memory()
         if required_mb > (available_mb - 100):
-            return -1  # 显存不足，直接返回失败
+            return -1  
     
     sum_time = 0.0
     fail_count = 0
@@ -89,14 +98,13 @@ def get_avg_time(n, size, black_percent):
         
         if one_time == -1:
             fail_count += 1
-            if fail_count >= 3:  # 连续3次失败，终止该任务
+            if fail_count >= 3: 
                 return -1
-            continue  # 跳过本次循环，重新尝试
+            continue  
         sum_time += one_time
 
     if sum_time == 0.0 and fail_count == n:
         return 0.0
-    # 避免除以0（全部失败时返回0.0）
     valid_count = n - fail_count
     if valid_count <= 0:
         return 0.0
@@ -113,7 +121,7 @@ if __name__ == "__main__":
         size = int(sys.argv[1])
         percent = int(sys.argv[2])
         n = int(sys.argv[3])
-        # 限制占比在0~100之间，避免无效值
+
         if percent < 0:
             percent = 0
         if percent > 100:
@@ -121,7 +129,7 @@ if __name__ == "__main__":
         avg_time_ms = get_avg_time(n, size, percent)
         
         if avg_time_ms == -1:
-            print("OOM")  # 标记OOM失败，供Shell脚本识别
+            print("OOM")  
         else:
             print(f"{avg_time_ms:.2f}")
     except Exception as e:

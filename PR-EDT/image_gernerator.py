@@ -2,12 +2,14 @@ import os
 import numpy as np
 from PIL import Image
 
-def generate_binary_images():
+def generate_binary_images(seed=42):
 
     os.makedirs("image", exist_ok=True)
     
     sizes = [1024, 2048, 4096, 8192]
     total_files = len(sizes) * 99
+
+    rng = np.random.default_rng(seed)
     
     print(f"开始生成图片，共 {total_files} 张...")
     
@@ -16,7 +18,7 @@ def generate_binary_images():
         
         for percent in range(1, 100):
 
-            random_vals = np.random.randint(0, 100, size=(size, size), dtype=np.uint8)
+            random_vals = rng.integers(0, 100, size=(size, size), dtype=np.uint8)
             binary_mask = (random_vals < percent).astype(np.uint8)
             
             img_array = (1 - binary_mask) * 255

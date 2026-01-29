@@ -1,4 +1,3 @@
-# single_task.py
 import sys
 import os
 import gc
@@ -16,8 +15,8 @@ def get_image_paths(image_dir="./image/", extensions=None, recursive=False):
     result = [str(f) for f in files if f.is_file() and f.suffix.lower() in ext and not f.name.startswith('.')]
     return sorted(result) if result else []
 
-os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True,max_split_size_mb:64,garbage_collection_threshold:0.4"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+# os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True,max_split_size_mb:64,garbage_collection_threshold:0.4"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def generate_binary_matrix(size, black_percent, seed=42):
     """生成二值化矩阵（兼容占比0%场景）"""
